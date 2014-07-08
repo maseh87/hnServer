@@ -7,11 +7,13 @@ var cheerio = require('cheerio');
 var mongoose = require('mongoose');
 var morgan = require('morgan');
 
-mongoose.connect(process.env.MONGOHQ_URL);
+mongoose.connect(process.env.MONGOHQ_URL || 'mongodb://localhost/articles');
 
 var ArticleSchema = new mongoose.Schema({
   article_id: String,
-  content: String
+  content: String,
+  title: String,
+  submitter: String
 });
 
 var Article = mongoose.model('articles', ArticleSchema);
@@ -28,42 +30,87 @@ var options = {
 
 app.get('/articles', function(req, res) {
   fetch(options)
-    .then(function(body) {
-
+    .then(preFetch)
+    .then(createArticles)
+    .then(function (results) {
+      res.json(results);
     })
     .fail(function(err) {
-
+      console.error(err);
+      res.send(500);
     });
 });
 
-app.get('/test', function(req, res) {
-  res.set('Content-type', 'text/html');
-  res.send(cache[0]);
-});
+app.get('/article/:id', function (req, res) {
+  var findOne = q.nbind(Article.findOne, Article);
+  var id = req.params.id;
+  findOne({'article_id': id})
+    .then(function (article) {
+      res.set('Content-type', 'text/html');
+      res.send(article.content);
+    })
+    .fail(function (err) {
+      console.error(err);
+      res.send(500);
+    });
+})
+
+// app.get('/test', function(req, res) {
+//   res.set('Content-type', 'text/html');
+//   res.send();
+// });
 
 
-app.listen(process.env.PORT);
+app.listen(process.env.PORT || 3000);
 console.log('App is listening');
 
-function fetch(options){
+function fetch(options, article){
   var defer = q.defer();
   request(options, function(err, response, body) {
     if(err) {
       defer.reject(err);
     } else {
-      defer.resolve(body);
+      if (article) {
+        defer.resolve({article: article, html: body});
+      } else {
+        defer.resolve(body);
+      }
     }
   })
   return defer.promise;
 };
 
 function preFetch(body) {
+  body = JSON.parse(body);
   var promises = [];
   for(var i = 0; i < body.stories.length; i++) {
-    promises.push(fetch(body.stories[i]));
+    var obj = {
+      id: body.stories[i].story_id,
+      title: body.stories[i].title,
+      submitter: body.stories[i].submitter
+    };
+    promises.push(fetch(body.stories[i].link, obj));
   }
-  return q.all(promises);
+  return q.allSettled(promises);
 };
+
+var createArticles = function (results) {
+  var promises = [];
+  for (var i = 0; i < results.length; i++) {
+    if (results[i].state !== 'rejected') {
+      var newArticle = {
+        article_id: results[i].value.article.id,
+        title: results[i].value.article.title,
+        submitter: results[i].value.article.submitter,
+        content: results[i].value.html
+      }
+      promises.push(Article.create(newArticle));
+    }
+  }
+  console.log('herer');
+  return q.allSettled(promises);
+};
+
 // request(body.stories[0].link, function(storyError, storyResponse, storyBody) {
     //   if(storyError) {
     //     return res.send(500);
