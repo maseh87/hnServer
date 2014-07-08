@@ -4,8 +4,17 @@ var q = require('q');
 var request = require('request');
 var cors = require('cors');
 var cheerio = require('cheerio');
-
+var mongoose = require('mongoose');
 var morgan = require('morgan');
+
+mongoose.connect(process.env.MONGOHQ_URL);
+
+var ArticleSchema = new mongoose.Schema({
+  article_id: String,
+  content: String
+});
+
+var Article = mongoose.model('articles', ArticleSchema);
 
 app.use(cors());
 app.use(morgan('dev'));
@@ -18,7 +27,6 @@ var options = {
 };
 var cache = [];
 app.get('/articles', function(req, res) {
-  //get articles from mashape
   request(options, function(err, response, body) {
     if(err) {
       return res.send(500);
@@ -33,9 +41,6 @@ app.get('/articles', function(req, res) {
       res.send(200);
     })
   })
-  //pre fetch articles
-
-  // res.send(200);
 });
 
 app.get('/test', function(req, res) {
