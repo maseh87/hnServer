@@ -25,22 +25,15 @@ var options = {
     "X-Mashape-Key": "ezm6j6ZDTTmshfYpcmqam21hJaXGp1taozKjsnkZZpn9dmHahi"
   }
 };
-var cache = [];
+
 app.get('/articles', function(req, res) {
-  request(options, function(err, response, body) {
-    if(err) {
-      return res.send(500);
-    }
-    var body = JSON.parse(body);
-    request(body.stories[0].link, function(storyError, storyResponse, storyBody) {
-      if(storyError) {
-        return res.send(500);
-      }
-      var $ = cheerio.load(storyBody);
-      cache.push($('body').html());
-      res.send(200);
+  fetch(options)
+    .then(function(body) {
+
     })
-  })
+    .fail(function(err) {
+
+    });
 });
 
 app.get('/test', function(req, res) {
@@ -52,3 +45,30 @@ app.get('/test', function(req, res) {
 app.listen(process.env.PORT);
 console.log('App is listening');
 
+function fetch(options){
+  var defer = q.defer();
+  request(options, function(err, response, body) {
+    if(err) {
+      defer.reject(err);
+    } else {
+      defer.resolve(body);
+    }
+  })
+  return defer.promise;
+};
+
+function preFetch(body) {
+  var promises = [];
+  for(var i = 0; i < body.stories.length; i++) {
+    promises.push(fetch(body.stories[i]));
+  }
+  return q.all(promises);
+};
+// request(body.stories[0].link, function(storyError, storyResponse, storyBody) {
+    //   if(storyError) {
+    //     return res.send(500);
+    //   }
+    //   var $ = cheerio.load(storyBody);
+    //   cache.push($('body').html());
+    //   res.send(200);
+    // })
